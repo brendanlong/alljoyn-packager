@@ -8,38 +8,38 @@ import sys
 from subprocess import call
 
 
-class Package:
-    def __init__(self, name, repo_name, scons_extra, dist, files, deps=None):
+class Repo:
+    def __init__(self, repo, name):
+        self.repo = repo
         self.name = name
-        self.repo_name = repo_name
+        self.checked_out = False
+
+    def checkout(self, build_dir, version):
+        path = os.path.join(build_dir, self.name)
+        if self.checked_out:
+            return path
+
+        call(["mkdir", "-p", build_dir])
+        if not os.path.exists(path):
+            call(["git", "clone", self.repo, self.name], cwd=build_dir)
+        if call(["git", "checkout", "v%s" % (version)], cwd=path):
+            raise Error("Failed to checkout git repo")
+        self.checked_out = True
+        return path
+
+
+class Build:
+    def __init__(self, repo, scons_extra, dist):
+        self.repo = repo
         self.scons_extra = scons_extra
         self.dist = dist
-        self.files = files
-        if deps:
-            self.deps = deps
-        else:
-            self.deps = []
+        self.built = False
 
+    def build(self, build_dir, version, variant, platform):
+        if self.built:
+            return
 
-class Packager:
-    def __init__(self, platform, package_type, variant, build_dir="build"):
-        self.platform = platform
-        self.package_type = package_type
-        self.variant = variant
-        self.build_dir = build_dir
-
-    def checkout(self, package, version):
-        git_url = "https://git.allseenalliance.org/gerrit/core/%s.git" % (package.repo_name)
-        call(["mkdir", "-p", self.build_dir])
-        path = os.path.join(self.build_dir, package.repo_name)
-        if not os.path.exists(path):
-            call(["git", "clone", git_url, package.repo_name], cwd=self.build_dir)
-        call(["git", "checkout", "v%s" % (version)], cwd=path)
-
-    def build(self, package, version):
-        self.checkout(package, version)
-
-        path = os.path.join(self.build_dir, package.repo_name)
+        path = self.repo.checkout(build_dir, version)
 
         # Remove -Werror
         try:
@@ -62,19 +62,31 @@ class Packager:
             # This means we don't need to fix anything
             pass
 
-        ret = call(["scons", package.scons_extra, "OS=linux",
-            "CPU=%s" % self.platform, "VARIANT=%s" % (self.variant),
+        ret = call(["scons", self.scons_extra, "OS=linux",
+            "CPU=%s" % (platform), "VARIANT=%s" % (variant),
             "BUILD_SERVICES_SAMPLES=off", "POLICYDB=on",
             "WS=off"],
             cwd=path)
         if ret:
-            raise Error()
+            raise Error("Failed to build")
+        self.built = True
 
-    def package(self, package, version):
-        self.build(package, version)
 
-        out_dir = os.path.join(self.build_dir, package.repo_name,
-            "build/linux", self.platform, self.variant, "dist", package.dist)
+class Package:
+    def __init__(self, name, build, files, deps=None):
+        self.name = name
+        self.build = build
+        self.files = files
+        if deps:
+            self.deps = deps
+        else:
+            self.deps = []
+
+    def package(self, build_dir, version, variant, platform, package_type):
+        self.build.build(build_dir, version, variant, platform)
+
+        out_dir = os.path.join(build_dir, self.build.repo.name,
+            "build/linux", platform, variant, "dist", self.build.dist)
         call(["rm", "-rf", "include", "lib64"], cwd=out_dir)
 
         # Rename inc -> include
@@ -82,19 +94,19 @@ class Packager:
 
         # Rename lib -> lib64 for 64-bit builds
         files = package.files
-        if self.platform == "x86_64":
+        if platform == "x86_64":
             call(["cp", "-r", "lib", "lib64"], cwd=out_dir)
             files = ["lib64" if file == "lib" else file
                      for file in files]
 
         args = ["fpm",
-            "-a", self.platform,
+            "-a", platform,
             "-C", out_dir,
             "-f",
-            "-n", package.name,
+            "-n", self.name,
             "--prefix", "/usr",
             "-s", "dir",
-            "-t", self.package_type,
+            "-t", package_type,
             "-v", version]
         for dep in package.deps:
             args.extend(["-d", dep])
@@ -102,13 +114,18 @@ class Packager:
         call(args)
 
 
-PACKAGES = [
-    Package("alljoyn", "alljoyn", "BINDINGS=cpp", "cpp", ["lib"]),
-    Package("alljoyn-devel", "alljoyn", "BINDINGS=cpp", "cpp", ["include"], ["alljoyn"]),
-    Package("alljoyn-daemon", "alljoyn", "BINDINGS=cpp", "cpp", ["bin/alljoyn-daemon"], ["alljoyn"]),
+ALLJOYN_REPO = Repo("https://git.allseenalliance.org/gerrit/core/alljoyn.git", "alljoyn")
 
-    Package("alljoyn-c", "alljoyn", "BINDINGS=c", "c", ["lib"]),
-    Package("alljoyn-c-devel", "alljoyn", "BINDINGS=c", "c", ["include"], ["alljoyn-c"]),
+ALLJOYN_C = Build(ALLJOYN_REPO, "BINDINGS=c", "c")
+ALLJOYN_CPP = Build(ALLJOYN_REPO, "BINDINGS=cpp", "cpp")
+
+PACKAGES = [
+    Package("alljoyn", ALLJOYN_CPP, ["lib"]),
+    Package("alljoyn-devel", ALLJOYN_CPP, ["include"], ["alljoyn"]),
+    Package("alljoyn-daemon", ALLJOYN_CPP, ["bin/alljoyn-daemon"], ["alljoyn"]),
+
+    Package("alljoyn-c", ALLJOYN_C, ["lib"]),
+    Package("alljoyn-c-devel", ALLJOYN_C, ["include"], ["alljoyn-c"]),
 ]
 
 
@@ -125,10 +142,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--build-dir", default="build")
     parser.add_argument("--debug", "-d", dest="variant", action="store_const",
         default="release", const="debug", help="Pass this option to build debug packages")
-    parser.add_argument("--bindings", default="c,cpp",
-        help="Comma-separated list of bindings to build. Options are c,cpp,java,js. See AllJoyn's BINDINGS")
     parser.add_argument("--platform", default=platform.machine(),
         help="AllJoyn's CPU. Should be detected automatically.")
     parser.add_argument("--type", "-t", dest="package_type",
@@ -137,6 +153,6 @@ if __name__ == "__main__":
     parser.add_argument("--version", default="15.09a", help="AllJoyn version to build. Will be used to pick git tag, and for package version.")
     args = parser.parse_args()
 
-    packager = Packager(args.platform, args.package_type, args.variant)
     for package in PACKAGES:
-        packager.package(package, args.version)
+        package.package(args.build_dir, args.version, args.variant,
+            args.platform, args.package_type)
