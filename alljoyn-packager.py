@@ -112,16 +112,29 @@ PACKAGES = [
 ]
 
 
+DISTRO_TO_PACKAGE_TYPE = {
+    "Debian": "deb",
+    "Fedora": "rpm",
+    "Ubuntu": "deb"
+}
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    distro, _, _ = platform.linux_distribution()
+    distro_package_type = DISTRO_TO_PACKAGE_TYPE.get(distro, None)
+
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--debug", "-d", dest="variant", action="store_const",
-        default="release", const="debug")
+        default="release", const="debug", help="Pass this option to build debug packages")
     parser.add_argument("--bindings", default="c,cpp",
-        help="Comma-separated list of bindings to build. Options are c,cpp,java,js")
-    parser.add_argument("--platform", default=platform.machine())
-    parser.add_argument("--type", "-t", dest="package_type", default="rpm",
+        help="Comma-separated list of bindings to build. Options are c,cpp,java,js. See AllJoyn's BINDINGS")
+    parser.add_argument("--platform", default=platform.machine(),
+        help="AllJoyn's CPU. Should be detected automatically.")
+    parser.add_argument("--type", "-t", dest="package_type",
+        default=distro_package_type, required=(distro_package_type == None),
         help="The kind of package to build. See fpm's documentation. You probably want deb or rpm.")
-    parser.add_argument("--version", default="15.09a")
+    parser.add_argument("--version", default="15.09a", help="AllJoyn version to build. Will be used to pick git tag, and for package version.")
     args = parser.parse_args()
 
     packager = Packager(args.platform, args.package_type, args.variant)
