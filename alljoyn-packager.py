@@ -89,15 +89,24 @@ class Package:
             "build/linux", platform, variant, "dist", self.build.dist)
         call(["rm", "-rf", "include", "lib64"], cwd=out_dir)
 
+        files = package.files
+
         # Rename inc -> include
-        call(["cp", "-r", "inc", "include"], cwd=out_dir)
+        if "include" in files:
+            call(["cp", "-r", "inc", "include"], cwd=out_dir)
 
         # Rename lib -> lib64 for 64-bit builds
-        files = package.files
-        if platform == "x86_64":
+        if platform == "x86_64" and "lib" in files:
             call(["cp", "-r", "lib", "lib64"], cwd=out_dir)
-            files = ["lib64" if file == "lib" else file
-                     for file in files]
+            files.remove("lib")
+            files.append("lib64")
+
+        if "jar" in files:
+            files.remove("jar")
+            jar_folder = os.path.join(out_dir, "jar")
+            for name in os.listdir(jar_folder):
+                if name.startswith("alljoyn") and name.endswith(".jar"):
+                    files.append("jar/%s=share/java/%s" % (name, name))
 
         args = ["fpm",
             "-a", platform,
@@ -118,6 +127,7 @@ ALLJOYN_REPO = Repo("https://git.allseenalliance.org/gerrit/core/alljoyn.git", "
 
 ALLJOYN_C = Build(ALLJOYN_REPO, "BINDINGS=c", "c")
 ALLJOYN_CPP = Build(ALLJOYN_REPO, "BINDINGS=cpp", "cpp")
+ALLJOYN_JAVA = Build(ALLJOYN_REPO, "BINDINGS=java", "java")
 
 PACKAGES = [
     Package("alljoyn", ALLJOYN_CPP, ["lib"]),
@@ -128,6 +138,8 @@ PACKAGES = [
     Package("alljoyn-c-devel", ALLJOYN_C, ["include"], ["alljoyn-c"]),
 ]
 
+if "JAVA_HOME" in os.environ:
+    PACKAGES.append(Package("alljoyn-java", ALLJOYN_JAVA, ["jar", "lib"]))
 
 DISTRO_TO_PACKAGE_TYPE = {
     "Debian": "deb",
