@@ -5,7 +5,7 @@ import platform
 import subprocess
 import sys
 
-from subprocess import call
+from subprocess import call, check_call, check_output
 
 
 class Repo:
@@ -22,8 +22,7 @@ class Repo:
         call(["mkdir", "-p", build_dir])
         if not os.path.exists(path):
             call(["git", "clone", self.repo, self.name], cwd=build_dir)
-        if call(["git", "checkout", "v%s" % (version)], cwd=path):
-            raise Error("Failed to checkout git repo")
+        check_call(["git", "checkout", "v%s" % (version)], cwd=path)
         self.checked_out = True
         return path
 
@@ -35,11 +34,14 @@ class Build:
         self.dist = dist
         self.built = False
 
-    def build(self, build_dir, version, variant, platform):
+    def build(self, build_dir, version, variant, cpu, os_name):
         if self.built:
             return
 
         path = self.repo.checkout(build_dir, version)
+
+        if os_name == "darwin" and cpu == "x86_64":
+            cpu = "x86"
 
         # Remove -Werror
         try:
@@ -62,13 +64,13 @@ class Build:
             # This means we don't need to fix anything
             pass
 
-        ret = call(["scons", self.scons_extra, "OS=linux",
-            "CPU=%s" % (platform), "VARIANT=%s" % (variant),
+        env = os.environ.copy()
+        env["CONFIGURATION"] = variant
+        check_call(["scons", self.scons_extra, "OS=%s" % (os_name),
+            "CPU=%s" % (cpu), "VARIANT=%s" % (variant),
             "BUILD_SERVICES_SAMPLES=off", "POLICYDB=on",
             "WS=off"],
-            cwd=path)
-        if ret:
-            raise Error("Failed to build")
+            cwd=path, env=env)
         self.built = True
 
 
@@ -82,11 +84,11 @@ class Package:
         else:
             self.deps = []
 
-    def package(self, build_dir, version, variant, platform, package_type):
-        self.build.build(build_dir, version, variant, platform)
+    def package(self, build_dir, version, variant, cpu, package_type, os_name, prefix):
+        self.build.build(build_dir, version, variant, cpu, os_name)
 
         out_dir = os.path.join(build_dir, self.build.repo.name,
-            "build/linux", platform, variant, "dist", self.build.dist)
+            "build", platform.system().lower(), "x86" if cpu == "x86_64" and os_name == "darwin" else cpu, variant, "dist", self.build.dist)
         call(["rm", "-rf", "include", "lib64"], cwd=out_dir)
 
         files = package.files
@@ -96,7 +98,7 @@ class Package:
             call(["cp", "-r", "inc", "include"], cwd=out_dir)
 
         # Rename lib -> lib64 for 64-bit builds
-        if platform == "x86_64" and "lib" in files:
+        if cpu == "x86_64" and os_name != "darwin" and "lib" in files:
             call(["cp", "-r", "lib", "lib64"], cwd=out_dir)
             files.remove("lib")
             files.append("lib64")
@@ -109,7 +111,7 @@ class Package:
                     files.append("jar/%s=share/java/%s" % (name, name))
 
         args = ["fpm",
-            "-a", platform,
+            "-a", cpu,
             "-C", out_dir,
             "-f",
             "-n", self.name,
@@ -117,6 +119,7 @@ class Package:
             "-s", "dir",
             "-t", package_type,
             "-v", version]
+        print(args)
         for dep in package.deps:
             args.extend(["-d", dep])
         args.extend(files)
@@ -149,22 +152,35 @@ DISTRO_TO_PACKAGE_TYPE = {
 
 
 if __name__ == "__main__":
-    distro, _, _ = platform.linux_distribution()
-    distro_package_type = DISTRO_TO_PACKAGE_TYPE.get(distro, None)
+    package_type = None
+    cpu = platform.machine()
+    system = platform.system()
+    if system == "Linux":
+        distro, _, _ = platform.linux_distribution()
+        package_type = DISTRO_TO_PACKAGE_TYPE.get(distro, None)
+    elif system == "Darwin":
+        package_type = "osxpkg"
+        sdk_root = check_output(["xcrun", "--show-sdk-path"]).decode("UTF-8").strip()
+        os.environ["SDKROOT"] = sdk_root
+        os.environ["CPPPATH"] = "/usr/local/opt/openssl/include"
 
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--build-dir", default="build")
     parser.add_argument("--debug", "-d", dest="variant", action="store_const",
         default="release", const="debug", help="Pass this option to build debug packages")
-    parser.add_argument("--platform", default=platform.machine(),
+    parser.add_argument("--platform", default=cpu,
         help="AllJoyn's CPU. Should be detected automatically.")
     parser.add_argument("--type", "-t", dest="package_type",
-        default=distro_package_type, required=(distro_package_type == None),
+        default=package_type, required=(package_type == None),
         help="The kind of package to build. See fpm's documentation. You probably want deb or rpm.")
     parser.add_argument("--version", default="15.09a", help="AllJoyn version to build. Will be used to pick git tag, and for package version.")
     args = parser.parse_args()
+    if args.package_type == "osxpkg":
+        prefix = "/usr/local"
+    else:
+        prefix = "/usr"
 
     for package in PACKAGES:
         package.package(args.build_dir, args.version, args.variant,
-            args.platform, args.package_type)
+            args.platform, args.package_type, system.lower(), prefix)
