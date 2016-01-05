@@ -4,12 +4,24 @@ This is a script to build AllJoyn packages using `fpm`.
 
 ## Dependencies
 
-You will need [`fpm`](https://github.com/jordansissel/fpm) and AllJoyn's dependencies. `fpm` can generally be installed using Ruby's `gem`.
+You will need [`fpm`](https://github.com/jordansissel/fpm) and AllJoyn's dependencies. `fpm` can generally be installed using Ruby's `gem`. You will also need [AllJoyn's dependencies](https://allseenalliance.org/framework/documentation/develop/building/linux).
 
 ### Fedora 23
 
     sudo dnf install ruby-devel rubygems
     gem install fpm
+
+### Ubuntu
+
+Update if this is a new VM:
+
+    sudo apt-get update
+    sudo apt-get upgrade
+
+Then install the dependencies:
+
+    sudo apt-get install ruby ruby-dev build-essential libgtk2.0-dev libssl-dev libxml2-dev libcap-dev xsltproc python scons
+    sudo gem install fpm
 
 ## Running
 
