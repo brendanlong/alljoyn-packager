@@ -141,7 +141,7 @@ PACKAGES = [
     Package("alljoyn-c-devel", ALLJOYN_C, ["include"], ["alljoyn-c"]),
 ]
 
-if "JAVA_HOME" in os.environ:
+if "JAVA_HOME" in os.environ and "CLASSPATH" in os.environ:
     PACKAGES.append(Package("alljoyn-java", ALLJOYN_JAVA, ["jar", "lib"]))
 
 DISTRO_TO_PACKAGE_TYPE = {
