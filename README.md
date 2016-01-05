@@ -39,3 +39,15 @@ To run:
 Your platform and package type should be auto-detected, but this has only been tested on `x86_64` and Fedora. Any [`-t` supported by `fpm`](https://github.com/jordansissel/fpm/wiki) should work.
 
 `--platform` should be detected automatically, but has only been tested on `x86_64`. Set manually if necessary.
+
+## Install
+
+### Fedora
+
+    sudo dnf install *.rpm
+
+### Ubuntu
+
+Currently you can only install one of alljoyn-c-devel and alljoyn-devel. Here's how you would install everything except alljoyn-c-devel:
+
+    sudo dpkg -i alljoyn_*.deb alljoyn-daemon_*.deb alljoyn-devel*.deb alljoyn-c_*.deb
