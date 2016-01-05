@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import os
+import multiprocessing
 import platform
 import subprocess
 import sys
@@ -69,7 +70,7 @@ class Build:
         check_call(["scons", self.scons_extra, "OS=%s" % (os_name),
             "CPU=%s" % (cpu), "VARIANT=%s" % (variant),
             "BUILD_SERVICES_SAMPLES=off", "POLICYDB=on",
-            "WS=off"],
+            "WS=off", "-j%s" % (multiprocessing.cpu_count())],
             cwd=path, env=env)
         self.built = True
 
