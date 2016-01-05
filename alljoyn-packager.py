@@ -120,7 +120,6 @@ class Package:
             "-s", "dir",
             "-t", package_type,
             "-v", version]
-        print(args)
         for dep in package.deps:
             args.extend(["-d", dep])
         args.extend(files)
