@@ -85,7 +85,7 @@ class Package:
         else:
             self.deps = []
 
-    def package(self, build_dir, version, variant, cpu, package_type, os_name, prefix):
+    def package(self, build_dir, version, variant, cpu, package_type, os_name, distro, prefix):
         self.build.build(build_dir, version, variant, cpu, os_name)
 
         out_dir = os.path.join(build_dir, self.build.repo.name,
@@ -98,8 +98,8 @@ class Package:
         if "include" in files:
             call(["cp", "-r", "inc", "include"], cwd=out_dir)
 
-        # Rename lib -> lib64 for 64-bit builds
-        if cpu == "x86_64" and os_name != "darwin" and "lib" in files:
+        # Rename lib -> lib64 for 64-bit Fedora builds
+        if cpu == "x86_64" and distro == "Fedora" and "lib" in files:
             call(["cp", "-r", "lib", "lib64"], cwd=out_dir)
             files.remove("lib")
             files.append("lib64")
@@ -159,6 +159,7 @@ if __name__ == "__main__":
         distro, _, _ = platform.linux_distribution()
         package_type = DISTRO_TO_PACKAGE_TYPE.get(distro, None)
     elif system == "Darwin":
+        distro = None
         package_type = "osxpkg"
         sdk_root = check_output(["xcrun", "--show-sdk-path"]).decode("UTF-8").strip()
         os.environ["SDKROOT"] = sdk_root
@@ -183,4 +184,4 @@ if __name__ == "__main__":
 
     for package in PACKAGES:
         package.package(args.build_dir, args.version, args.variant,
-            args.platform, args.package_type, system.lower(), prefix)
+            args.platform, args.package_type, system.lower(), distro, prefix)
