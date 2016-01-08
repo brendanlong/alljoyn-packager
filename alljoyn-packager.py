@@ -154,6 +154,8 @@ DISTRO_TO_PACKAGE_TYPE = {
 if __name__ == "__main__":
     package_type = None
     cpu = platform.machine()
+    if cpu in ("i686", "i386"):
+      cpu = "x86"
     system = platform.system()
     if system == "Linux":
         distro, _, _ = platform.linux_distribution()
