@@ -41,7 +41,7 @@ class Build:
 
         path = self.repo.checkout(build_dir, version)
 
-        if os_name == "darwin" and cpu == "x86_64":
+        if (os_name == "darwin" and cpu == "x86_64") or cpu in ("i686", "i386"):
             cpu = "x86"
 
         # Remove -Werror
@@ -154,8 +154,6 @@ DISTRO_TO_PACKAGE_TYPE = {
 if __name__ == "__main__":
     package_type = None
     cpu = platform.machine()
-    if cpu in ("i686", "i386"):
-      cpu = "x86"
     system = platform.system()
     if system == "Linux":
         distro, _, _ = platform.linux_distribution()
