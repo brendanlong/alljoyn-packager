@@ -178,7 +178,7 @@ if __name__ == "__main__":
     parser.add_argument("--debug", "-d", dest="variant", action="store_const",
         default="release", const="debug", help="Pass this option to build debug packages")
     parser.add_argument("--platform", default=cpu,
-        help="AllJoyn's CPU. Should be detected automatically.")
+        help="AllJoyn's CPU. Should be detected automatically. Reasonable options include x86_64 and i386.")
     parser.add_argument("--type", "-t", dest="package_type",
         default=package_type, required=(package_type == None),
         help="The kind of package to build. See fpm's documentation. You probably want deb or rpm.")
