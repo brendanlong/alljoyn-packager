@@ -41,7 +41,7 @@ class Build:
 
         path = self.repo.checkout(build_dir, version)
 
-        if (os_name == "darwin" and cpu == "x86_64") or cpu in ("i686", "i386"):
+        if (os_name == "darwin" and cpu == "x86_64") or cpu == "i386":
             cpu = "x86"
 
         # Remove -Werror
@@ -88,8 +88,13 @@ class Package:
     def package(self, build_dir, version, variant, cpu, package_type, os_name, distro, prefix):
         self.build.build(build_dir, version, variant, cpu, os_name)
 
+        if cpu == "i386" or (cpu == "x86_64" and os_name == "darwin"):
+            build_cpu = "x86"
+        else:
+            build_cpu = cpu
+
         out_dir = os.path.join(build_dir, self.build.repo.name,
-            "build", platform.system().lower(), "x86" if cpu == "x86_64" and os_name == "darwin" else cpu, variant, "dist", self.build.dist)
+            "build", platform.system().lower(), build_cpu, variant, "dist", self.build.dist)
         call(["rm", "-rf", "include", "lib64"], cwd=out_dir)
 
         files = package.files
@@ -154,6 +159,8 @@ DISTRO_TO_PACKAGE_TYPE = {
 if __name__ == "__main__":
     package_type = None
     cpu = platform.machine()
+    if cpu == "i686":
+        cpu = "i386"
     system = platform.system()
     if system == "Linux":
         distro, _, _ = platform.linux_distribution()
