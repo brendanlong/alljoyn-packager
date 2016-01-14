@@ -100,8 +100,7 @@ class Package:
         files = package.files
 
         # Rename inc -> include
-        if "include" in files:
-            call(["cp", "-r", "inc", "include"], cwd=out_dir)
+        call(["cp", "-r", "inc", "include"], cwd=out_dir)
 
         # Rename lib -> lib64 for 64-bit Fedora builds
         if cpu == "x86_64" and distro == "Fedora" and "lib" in files:
@@ -139,11 +138,12 @@ ALLJOYN_JAVA = Build(ALLJOYN_REPO, "BINDINGS=java", "java")
 
 PACKAGES = [
     Package("alljoyn", ALLJOYN_CPP, ["lib"]),
-    Package("alljoyn-devel", ALLJOYN_CPP, ["include"], ["alljoyn"]),
+    Package("qcc-devel", ALLJOYN_CPP, ["include/qcc"]),
+    Package("alljoyn-devel", ALLJOYN_CPP, ["include/alljoyn"], ["alljoyn", "qcc-devel"]),
     Package("alljoyn-daemon", ALLJOYN_CPP, ["bin/alljoyn-daemon"], ["alljoyn"]),
 
     Package("alljoyn-c", ALLJOYN_C, ["lib"]),
-    Package("alljoyn-c-devel", ALLJOYN_C, ["include"], ["alljoyn-c"]),
+    Package("alljoyn-c-devel", ALLJOYN_C, ["include/alljoyn_c"], ["alljoyn-c", "qcc-devel"]),
 ]
 
 if "JAVA_HOME" in os.environ and "CLASSPATH" in os.environ:
